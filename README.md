@@ -110,3 +110,4 @@ For issues or questions, please check the console logs first for detailed error 
 3. سجل مستخدم جديد
 4. اربط واتساب عبر مسح رمز QR
 5. سيرد التطبيق تلقائياً برسالة "أهلا وسهلا بك" على أي رسالة واردة"# whatsapp-web-js-ali-tariq" 
+"# whatsapp-web-js-ali-tariq" 
