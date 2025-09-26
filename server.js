@@ -143,8 +143,12 @@ app.post('/connect', (req, res) => {
             
             if (!message.fromMe && sessionData.isConnected) {
                 try {
-                    await message.reply('أهلا وسهلا بك');
-                    console.log('✅ Auto-replied with Arabic greeting to:', message.from);
+                    const autoReply = `أهلا وسهلا، هذا رد تلقائي
+يرجى التواصل على تليجرام في نفس هذا الرقم الهاتف
+أو عن طريق معرف تليجرام https://t.me/ali_tariq4a`;
+                    
+                    await message.reply(autoReply);
+                    console.log('✅ Auto-replied with Telegram contact info to:', message.from);
                 } catch (error) {
                     console.error('❌ Error replying to message:', error);
                 }
