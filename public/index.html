@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>واتساب - الرد التلقائي</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #128C7E;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            direction: rtl;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+        h1 { color: #128C7E; margin-bottom: 20px; }
+        .status {
+            padding: 10px;
+            margin: 15px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .connecting { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #128C7E;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover { background: #0d6b5c; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .danger { background: #dc3545; }
+        .danger:hover { background: #c82333; }
+        .qr-container {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .hidden { display: none; }
+        img { max-width: 250px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 واتساب الرد التلقائي</h1>
+        <p>اضغط "ربط واتساب" ثم امسح رمز QR</p>
+        
+        <div id="status" class="status disconnected">غير متصل</div>
+        
+        <div id="phone-info" class="hidden">
+            <strong>رقم الهاتف:</strong> <span id="phone-number"></span>
+        </div>
+        
+        <button id="connect-btn">ربط واتساب</button>
+        <button id="disconnect-btn" class="danger hidden">قطع الاتصال</button>
+        
+        <div id="qr-container" class="qr-container hidden">
+            <h3>امسح رمز QR:</h3>
+            <div id="qr-code"></div>
+            <small>افتح واتساب → الإعدادات → الأجهزة المرتبطة → ربط جهاز</small>
+        </div>
+    </div>
+
+    <script>
+        const status = document.getElementById('status');
+        const phoneInfo = document.getElementById('phone-info');
+        const phoneNumber = document.getElementById('phone-number');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const qrContainer = document.getElementById('qr-container');
+        const qrCode = document.getElementById('qr-code');
+
+        let statusInterval, qrInterval;
+
+        function updateStatus() {
+            fetch('/status')
+                .then(r => r.json())
+                .then(data => {
+                    console.log('Status update:', data);
+                    
+                    if (data.isConnected) {
+                        status.textContent = '✅ متصل وجاهز للرد التلقائي';
+                        status.className = 'status connected';
+                        connectBtn.classList.add('hidden');
+                        disconnectBtn.classList.remove('hidden');
+                        qrContainer.classList.add('hidden');
+                        
+                        if (data.phoneNumber) {
+                            phoneNumber.textContent = data.phoneNumber;
+                            phoneInfo.classList.remove('hidden');
+                        }
+                        
+                        if (qrInterval) {
+                            clearInterval(qrInterval);
+                            qrInterval = null;
+                        }
+                    } else if (data.isInitializing) {
+                        status.textContent = '🔄 جاري الاتصال...';
+                        status.className = 'status connecting';
+                    } else {
+                        status.textContent = '❌ غير متصل';
+                        status.className = 'status disconnected';
+                        connectBtn.classList.remove('hidden');
+                        disconnectBtn.classList.add('hidden');
+                        phoneInfo.classList.add('hidden');
+                        
+                        if (qrInterval) {
+                            clearInterval(qrInterval);
+                            qrInterval = null;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating status:', error);
+                });
+        }
+
+        connectBtn.onclick = async () => {
+            connectBtn.disabled = true;
+            connectBtn.textContent = 'جاري الاتصال...';
+            status.textContent = '🔄 جاري الاتصال...';
+            status.className = 'status connecting';
+
+            try {
+                const response = await fetch('/connect', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    status.textContent = '⏳ في انتظار مسح رمز QR';
+                    qrContainer.classList.remove('hidden');
+                    
+                    // Check for QR code immediately
+                    setTimeout(() => {
+                        fetch('/qr').then(r => r.json()).then(qrData => {
+                            console.log('Immediate QR check:', qrData);
+                            if (qrData.qrCode) {
+                                console.log('Displaying QR code immediately, length:', qrData.qrCode.length);
+                                const qrUrl = `https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl=${encodeURIComponent(qrData.qrCode)}`;
+                                qrCode.innerHTML = `
+                                    <img src="${qrUrl}" alt="QR Code" style="border: 1px solid #ddd; padding: 10px; background: white;"
+                                         onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUwIiBoZWlnaHQ9IjI1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhkN2RhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNHB4IiBmaWxsPSIjNzIxYzI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+RXJyb3IgbG9hZGluZyBRUjwvdGV4dD48L3N2Zz4='"/>
+                                    <p style="margin-top: 10px; color: #666; font-size: 12px;">امسح هذا الرمز بواتساب</p>
+                                    <small style="color: #888; font-size: 10px;">QR Code Length: ${qrData.qrCode.length}</small>
+                                `;
+                            }
+                        }).catch(err => console.error('Immediate QR check error:', err));
+                    }, 500);
+                    
+                    qrInterval = setInterval(() => {
+                        fetch('/qr').then(r => r.json()).then(data => {
+                            console.log('QR status:', data);
+                            if (data.connected) {
+                                clearInterval(qrInterval);
+                                qrInterval = null;
+                                updateStatus();
+                            } else if (data.qrCode) {
+                                console.log('Displaying QR code, length:', data.qrCode.length);
+                                
+                                // Create QR code using Google Chart API (more reliable)
+                                const qrUrl = `https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl=${encodeURIComponent(data.qrCode)}`;
+                                
+                                qrCode.innerHTML = `
+                                    <img src="${qrUrl}" alt="QR Code" style="border: 1px solid #ddd; padding: 10px; background: white;"
+                                         onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUwIiBoZWlnaHQ9IjI1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhkN2RhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNHB4IiBmaWxsPSIjNzIxYzI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+RXJyb3IgbG9hZGluZyBRUjwvdGV4dD48L3N2Zz4='"/>
+                                    <p style="margin-top: 10px; color: #666; font-size: 12px;">امسح هذا الرمز بواتساب</p>
+                                    <small style="color: #888; font-size: 10px;">QR Code Length: ${data.qrCode.length}</small>
+                                `;
+                            } else {
+                                qrCode.innerHTML = '<p>جاري إنشاء رمز QR...</p>';
+                            }
+                        }).catch(error => {
+                            console.error('QR polling error:', error);
+                            qrCode.innerHTML = '<p style="color: red;">خطأ في تحميل رمز QR</p>';
+                        });
+                    }, 1000); // Check every 1 second instead of 2
+                }
+            } catch (error) {
+                status.textContent = '❌ خطأ في الاتصال';
+                status.className = 'status disconnected';
+            } finally {
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'ربط واتساب';
+            }
+        };
+
+        disconnectBtn.onclick = async () => {
+            await fetch('/disconnect', { method: 'POST' });
+            updateStatus();
+        };
+
+        updateStatus();
+        statusInterval = setInterval(updateStatus, 5000);
+    </script>
+</body>
+</html>
