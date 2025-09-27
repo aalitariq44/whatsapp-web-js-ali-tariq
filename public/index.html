@@ -69,7 +69,10 @@
         </div>
         
         <button id="connect-btn">ربط واتساب</button>
-        <button id="disconnect-btn" class="danger hidden">قطع الاتصال</button>
+        <div>
+            <button id="disconnect-btn" class="danger hidden">قطع الاتصال</button>
+            <button id="logout-btn" class="danger hidden">تسجيل الخروج</button>
+        </div>
         
         <div id="qr-container" class="qr-container hidden">
             <h3>امسح رمز QR:</h3>
@@ -83,7 +86,8 @@
         const phoneInfo = document.getElementById('phone-info');
         const phoneNumber = document.getElementById('phone-number');
         const connectBtn = document.getElementById('connect-btn');
-        const disconnectBtn = document.getElementById('disconnect-btn');
+    const disconnectBtn = document.getElementById('disconnect-btn');
+    const logoutBtn = document.getElementById('logout-btn');
         const qrContainer = document.getElementById('qr-container');
         const qrCode = document.getElementById('qr-code');
 
@@ -100,6 +104,7 @@
                         status.className = 'status connected';
                         connectBtn.classList.add('hidden');
                         disconnectBtn.classList.remove('hidden');
+                        logoutBtn.classList.remove('hidden');
                         qrContainer.classList.add('hidden');
                         
                         if (data.phoneNumber) {
@@ -119,6 +124,7 @@
                         status.className = 'status disconnected';
                         connectBtn.classList.remove('hidden');
                         disconnectBtn.classList.add('hidden');
+                        logoutBtn.classList.add('hidden');
                         phoneInfo.classList.add('hidden');
                         
                         if (qrInterval) {
@@ -152,10 +158,10 @@
                             console.log('Immediate QR check:', qrData);
                             if (qrData.qrCode) {
                                 console.log('Displaying QR code immediately, length:', qrData.qrCode.length);
-                                const qrUrl = `https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl=${encodeURIComponent(qrData.qrCode)}`;
+                                const qrUrl = `/qr-image.svg?ts=${Date.now()}`; // prevent caching
                                 qrCode.innerHTML = `
                                     <img src="${qrUrl}" alt="QR Code" style="border: 1px solid #ddd; padding: 10px; background: white;"
-                                         onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUwIiBoZWlnaHQ9IjI1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhkN2RhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNHB4IiBmaWxsPSIjNzIxYzI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+RXJyb3IgbG9hZGluZyBRUjwvdGV4dD48L3N2Zz4='"/>
+                                         onerror="this.onerror=null; this.replaceWith(document.createTextNode('خطأ في تحميل رمز QR'));"/>
                                     <p style="margin-top: 10px; color: #666; font-size: 12px;">امسح هذا الرمز بواتساب</p>
                                     <small style="color: #888; font-size: 10px;">QR Code Length: ${qrData.qrCode.length}</small>
                                 `;
@@ -172,13 +178,10 @@
                                 updateStatus();
                             } else if (data.qrCode) {
                                 console.log('Displaying QR code, length:', data.qrCode.length);
-                                
-                                // Create QR code using Google Chart API (more reliable)
-                                const qrUrl = `https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl=${encodeURIComponent(data.qrCode)}`;
-                                
+                                const qrUrl = `/qr-image.svg?ts=${Date.now()}`; // local generator
                                 qrCode.innerHTML = `
                                     <img src="${qrUrl}" alt="QR Code" style="border: 1px solid #ddd; padding: 10px; background: white;"
-                                         onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjUwIiBoZWlnaHQ9IjI1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjhkN2RhIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNHB4IiBmaWxsPSIjNzIxYzI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+RXJyb3IgbG9hZGluZyBRUjwvdGV4dD48L3N2Zz4='"/>
+                                         onerror="this.onerror=null; this.replaceWith(document.createTextNode('خطأ في تحميل رمز QR'));"/>
                                     <p style="margin-top: 10px; color: #666; font-size: 12px;">امسح هذا الرمز بواتساب</p>
                                     <small style="color: #888; font-size: 10px;">QR Code Length: ${data.qrCode.length}</small>
                                 `;
@@ -203,6 +206,23 @@
         disconnectBtn.onclick = async () => {
             await fetch('/disconnect', { method: 'POST' });
             updateStatus();
+        };
+
+        logoutBtn.onclick = async () => {
+            logoutBtn.disabled = true;
+            logoutBtn.textContent = 'جاري تسجيل الخروج...';
+            try {
+                await fetch('/logout', { method: 'POST' });
+            } catch (e) {
+                console.error('Logout error:', e);
+            } finally {
+                logoutBtn.disabled = false;
+                logoutBtn.textContent = 'تسجيل الخروج';
+                // force reset of QR and status
+                qrCode.innerHTML = '';
+                qrContainer.classList.add('hidden');
+                updateStatus();
+            }
         };
 
         updateStatus();

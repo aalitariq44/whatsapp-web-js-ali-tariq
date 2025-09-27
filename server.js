@@ -1,7 +1,9 @@
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,7 +66,6 @@ app.get('/', (req, res) => {
     console.log('Serving index.html from:', indexPath);
     
     // Check if file exists before serving
-    const fs = require('fs');
     if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
     } else {
@@ -85,7 +86,6 @@ app.get('/', (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    const fs = require('fs');
     const publicPath = path.join(__dirname, 'public');
     const indexPath = path.join(publicPath, 'index.html');
     
@@ -260,6 +260,30 @@ app.get('/qr', (req, res) => {
     });
 });
 
+// Serve QR as an SVG image generated locally (no external services)
+app.get('/qr-image.svg', async (req, res) => {
+    try {
+        if (!sessionData.qrCode) {
+            return res.status(404).send('');
+        }
+        const svg = await QRCode.toString(sessionData.qrCode, {
+            type: 'svg',
+            width: 250,
+            margin: 1,
+            errorCorrectionLevel: 'M'
+        });
+        res.setHeader('Content-Type', 'image/svg+xml');
+        // Prevent caching so new codes always show
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.send(svg);
+    } catch (e) {
+        console.error('Error generating QR SVG:', e);
+        res.status(500).send('');
+    }
+});
+
 // Disconnect WhatsApp
 app.post('/disconnect', async (req, res) => {
     if (whatsappClient) {
@@ -285,6 +309,65 @@ app.post('/disconnect', async (req, res) => {
         res.json({ 
             success: true, 
             message: 'WhatsApp was not connected' 
+        });
+    }
+});
+
+
+// Logout WhatsApp completely (remove saved session and require re-scan)
+app.post('/logout', async (req, res) => {
+    try {
+        // Try to logout gracefully if client exists
+        if (whatsappClient) {
+            try {
+                if (typeof whatsappClient.logout === 'function') {
+                    await whatsappClient.logout();
+                }
+            } catch (e) {
+                console.warn('Warning during client.logout():', e.message);
+            }
+            try {
+                await whatsappClient.destroy();
+            } catch (e) {
+                console.warn('Warning during client.destroy():', e.message);
+            }
+            whatsappClient = null;
+        }
+
+        // Clear session state
+        sessionData.isConnected = false;
+        sessionData.qrCode = null;
+        sessionData.phoneNumber = null;
+        sessionData.isInitializing = false;
+
+        // Remove LocalAuth stored sessions to force a full re-login
+        const authBase = path.join(__dirname, 'wwebjs_auth');
+        const sessionDefault = path.join(authBase, 'session-default');
+        const sessionLegacy = path.join(authBase, 'session');
+
+        const removeDir = (p) => {
+            return new Promise((resolve) => {
+                fs.rm(p, { recursive: true, force: true }, (err) => {
+                    if (err) console.warn(`Warning removing ${p}:`, err.message);
+                    resolve();
+                });
+            });
+        };
+
+        await Promise.all([
+            removeDir(sessionDefault),
+            removeDir(sessionLegacy)
+        ]);
+
+        res.json({
+            success: true,
+            message: 'Logged out and cleared saved session successfully'
+        });
+    } catch (error) {
+        console.error('Error during logout:', error);
+        res.status(500).json({
+            error: 'Failed to logout completely',
+            details: error.message
         });
     }
 });
