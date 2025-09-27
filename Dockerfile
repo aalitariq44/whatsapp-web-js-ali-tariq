@@ -24,11 +24,15 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
-# Copy app source
-COPY . .
+# Copy app source code first
+COPY server.js ./
+COPY public/ ./public/
 
-# Create directory for WhatsApp auth data
+# Create directory for WhatsApp auth data with proper permissions
 RUN mkdir -p ./wwebjs_auth && chown -R node:node ./wwebjs_auth
+
+# Ensure public directory has correct permissions
+RUN chown -R node:node ./public
 
 # Switch to non-root user
 USER node

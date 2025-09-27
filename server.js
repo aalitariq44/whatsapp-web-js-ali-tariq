@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 // Simple session data
@@ -60,7 +60,43 @@ function createWhatsAppClient() {
 
 // Routes
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    console.log('Serving index.html from:', indexPath);
+    
+    // Check if file exists before serving
+    const fs = require('fs');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        console.error('❌ index.html not found at:', indexPath);
+        res.status(404).send(`
+            <h1>File Not Found</h1>
+            <p>index.html not found at: ${indexPath}</p>
+            <p>Available files in public directory:</p>
+            <ul>
+                ${fs.existsSync(path.join(__dirname, 'public')) ? 
+                    fs.readdirSync(path.join(__dirname, 'public')).map(f => `<li>${f}</li>`).join('') : 
+                    '<li>public directory does not exist</li>'
+                }
+            </ul>
+        `);
+    }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    const fs = require('fs');
+    const publicPath = path.join(__dirname, 'public');
+    const indexPath = path.join(publicPath, 'index.html');
+    
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        publicDirExists: fs.existsSync(publicPath),
+        indexFileExists: fs.existsSync(indexPath),
+        publicFiles: fs.existsSync(publicPath) ? fs.readdirSync(publicPath) : [],
+        workingDirectory: __dirname
+    });
 });
 
 // Get connection status
