@@ -69,9 +69,8 @@ jspm_packages/
 .nuxt
 dist
 
-# Gatsby files
+# Gatsby files (keep cache ignored, but allow our app's public/ to be sent to Docker)
 .cache/
-public
 
 # Storybook build outputs
 .out
